@@ -1,0 +1,8 @@
+[package]
+name = "rpi-lidar"
+version = "0.1.0"
+rust-version = "1.86"
+edition = "2024"
+authors = ["Anes Benmerzoug <anes.benmerzoug@gmail.com>"]
+
+[dependencies]
