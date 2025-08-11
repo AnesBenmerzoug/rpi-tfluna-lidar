@@ -33,32 +33,28 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     tf_luna.enable()?;
 
-    tf_luna.show_raw_register_contents()?;
-
     let device_information = tf_luna.get_device_information()?;
     println!("Device information: {:?}", device_information);
 
-    let rerun_server_ip = env::var("RERUN_SERVER_IP").unwrap_or(String::from("127.0.0.1"));
+    let rerun_server_ip = env::var("RERUN_SERVER_IP").unwrap_or(String::from("192.168.178.21"));
 
     let rec = rerun::RecordingStreamBuilder::new("rpi-lidar").connect_grpc_opts(
         format!("rerun+http://{}:9876/proxy", rerun_server_ip),
         rerun::default_flush_timeout(),
     )?;
 
-    loop {
+    sleep(Duration::from_secs(1));
+
+    for _ in 0..6000 {
         let reading = tf_luna.read()?;
-        println!("reading = {:?}", reading);
         rec.set_time_sequence("timestamp", reading.timestamp);
+        rec.log("lidar/distance", &rerun::Scalars::single(reading.distance))?;
         rec.log(
-            "rpi/lidar/distance",
-            &rerun::Scalars::single(reading.distance),
-        )?;
-        rec.log(
-            "rpi/lidar/signal_strength",
+            "lidar/signal_strength",
             &rerun::Scalars::single(reading.signal_strength),
         )?;
         rec.log(
-            "rpi/lidar/temperature",
+            "lidar/temperature",
             &rerun::Scalars::single(reading.temperature),
         )?;
         sleep(Duration::from_millis(100));
