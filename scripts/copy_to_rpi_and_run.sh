@@ -8,7 +8,7 @@ DEFAULT_DESTINATION="~/Projects/main"
 usage() {
     echo "Usage: $0 FILE [options]"
     echo "Positional arguments:"
-    echo "  FILE                  Source file to copy (required)"
+    echo "  FILE                  Source file to copy and run (required)"
     echo "Options:"
     echo "  -h, --host HOST       Specify the target host (default: $DEFAULT_HOST)"
     echo "  -d, --dest DEST       Specify the destination path (default: $DEFAULT_DESTINATION)"
@@ -74,3 +74,7 @@ else
     echo "Error: File copy failed."
     exit 1
 fi
+
+# Run copied binary file
+echo "Running $FILE on $HOST:$DESTINATION"
+ssh $HOST $DESTINATION
