@@ -1,9 +1,11 @@
 extern crate rpi_lidar;
 
+use std::env;
 use std::error::Error;
 use std::thread::sleep;
 use std::time::Duration;
 
+use rerun;
 use rppal::i2c::I2c;
 
 use rpi_lidar::tf_luna::TFLuna;
@@ -36,10 +38,30 @@ fn main() -> Result<(), Box<dyn Error>> {
     let device_information = tf_luna.get_device_information()?;
     println!("Device information: {:?}", device_information);
 
-    for _ in 0..10 {
+    let rerun_server_ip = env::var("RERUN_SERVER_IP").unwrap_or(String::from("127.0.0.1"));
+
+    let rec = rerun::RecordingStreamBuilder::new("rpi-lidar").connect_grpc_opts(
+        format!("rerun+http://{}:9876/proxy", rerun_server_ip),
+        rerun::default_flush_timeout(),
+    )?;
+
+    loop {
         let reading = tf_luna.read()?;
         println!("reading = {:?}", reading);
-        sleep(Duration::from_millis(1000));
+        rec.set_time_sequence("timestamp", reading.timestamp);
+        rec.log(
+            "rpi/lidar/distance",
+            &rerun::Scalars::single(reading.distance),
+        )?;
+        rec.log(
+            "rpi/lidar/signal_strength",
+            &rerun::Scalars::single(reading.signal_strength),
+        )?;
+        rec.log(
+            "rpi/lidar/temperature",
+            &rerun::Scalars::single(reading.temperature),
+        )?;
+        sleep(Duration::from_millis(100));
     }
     Ok(())
 }
