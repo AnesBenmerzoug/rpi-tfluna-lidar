@@ -6,3 +6,4 @@ edition = "2024"
 authors = ["Anes Benmerzoug <anes.benmerzoug@gmail.com>"]
 
 [dependencies]
+rppal = "0.22.1"
