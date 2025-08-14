@@ -13,8 +13,6 @@ use rpi_lidar::tf_luna::TFLuna;
 const TF_LUNA_ADDRESS: u16 = 0x10;
 
 fn main() -> Result<(), Box<dyn Error>> {
-    println!("Hello Raspberry Pi!");
-
     let mut i2c = match I2c::new() {
         Ok(i2c) => i2c,
         Err(err) => {
@@ -45,7 +43,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     sleep(Duration::from_secs(1));
 
-    for _ in 0..6000 {
+    for _ in 0..200 {
         let reading = tf_luna.read()?;
         rec.set_time_sequence("timestamp", reading.timestamp);
         rec.log("lidar/distance", &rerun::Scalars::single(reading.distance))?;
