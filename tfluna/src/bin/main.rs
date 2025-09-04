@@ -1,4 +1,4 @@
-extern crate rpi_lidar;
+extern crate tfluna;
 
 use std::env;
 use std::error::Error;
@@ -8,7 +8,7 @@ use std::time::Duration;
 use rerun;
 use rppal::i2c::I2c;
 
-use rpi_lidar::tf_luna::TFLuna;
+use tfluna::tf_luna::TFLuna;
 
 const TF_LUNA_ADDRESS: u16 = 0x10;
 
