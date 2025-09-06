@@ -9,4 +9,5 @@ repository.workspace = true
 
 [dependencies]
 rerun = { workspace = true }
-rppal = { workspace = true }
+rppal = { workspace = true, features = ["hal"] }
+embedded-tfluna = { path = "/home/anesbenmerzoug/personaldir/code/embedded-tfluna" }
