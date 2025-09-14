@@ -7,7 +7,7 @@ use embedded_tfluna::{
     i2c::{I2CAddress, TFLuna},
     TFLunaSync,
 };
-// use rerun;
+use rerun;
 use rppal::hal::Delay;
 use rppal::i2c::I2c;
 use rppal::pwm::{Channel, Polarity, Pwm};
@@ -76,14 +76,12 @@ impl ServoMotor {
 }
 
 fn main() -> Result<(), Box<dyn Error>> {
-    /*
     // Connect to rerun server
     let rerun_server_ip = env::var("RERUN_SERVER_IP").unwrap_or(String::from("192.168.178.21"));
     let rec = rerun::RecordingStreamBuilder::new("rpi-lidar").connect_grpc_opts(
         format!("rerun+http://{}:9876/proxy", rerun_server_ip),
         rerun::default_flush_timeout(),
     )?;
-    */
 
     // Instantiate I2C peripheral
     let i2c = match I2c::new() {
@@ -121,37 +119,39 @@ fn main() -> Result<(), Box<dyn Error>> {
         Duration::from_millis(PERIOD_MS),
         Duration::from_micros(PULSE_MAX_US),
         Polarity::Normal,
-        false,
+        true,
     )?;
     let servo_top = ServoMotor::new(pwm_top, PULSE_NEUTRAL_TOP_US, PULSE_MAX_US, MAX_ANGLE_DEG)?;
     thread::sleep(Duration::from_millis(1000));
 
-    for angle_bottom in (-(MAX_ANGLE_DEG as i64)..=(MAX_ANGLE_DEG as i64)).step_by(5) {
+    let mut positions = Vec::new();
+
+    for angle_bottom in (-(MAX_ANGLE_DEG as i64)..=(MAX_ANGLE_DEG as i64)).step_by(1) {
         println!("==========");
         println!("Bottom servo angle: {angle_bottom}");
         servo_bottom.set_angle(angle_bottom)?;
         thread::sleep(Duration::from_millis(200));
-        for angle_top in (0..1_i64) {
-        // for angle_top in (-(MAX_ANGLE_DEG as i64)..=(MAX_ANGLE_DEG as i64)).step_by(5) {
+
+        for angle_top in (-(MAX_ANGLE_DEG as i64)..=(MAX_ANGLE_DEG as i64)).step_by(1) {
+            println!("----------");
             println!("Top servo angle: {angle_top}");
             servo_top.set_angle(angle_top)?;
-            thread::sleep(Duration::from_millis(10));
+            thread::sleep(Duration::from_millis(200));
 
             let measurement = tfluna.measure().unwrap();
             // Helper variables
             let yaw = (angle_bottom as f32).to_radians();
             let pitch = (angle_top as f32).to_radians();
 
-            let px = (measurement.distance as f32)
-                * (pitch as f32).cos()
-                * (yaw as f32).cos();
+            let px = (measurement.distance as f32) * (pitch as f32).cos() * (yaw as f32).cos();
             let py = (measurement.distance as f32) * (pitch as f32).cos() * (yaw as f32).sin();
             let pz = (measurement.distance as f32) * (pitch as f32).sin();
+            let position = [px, py, pz];
             println!("distance = {}", measurement.distance);
-            println!("Px = {px}, Py = {py}, Pz = {pz}");
-            /*
-            println!("measurement = {:?}", measurement);
-            rec.set_time_sequence("timestamp", measurement.timestamp);
+            println!("position = {position:?}");
+            positions.push(position);
+
+            rec.set_time("capture_time", std::time::SystemTime::now());
             rec.log(
                 "lidar/distance",
                 &rerun::Scalars::single(measurement.distance),
@@ -164,7 +164,10 @@ fn main() -> Result<(), Box<dyn Error>> {
                 "lidar/temperature",
                 &rerun::Scalars::single(measurement.temperature),
             )?;
-            */
+            rec.log(
+                "lidar/position",
+                &rerun::Points3D::new(positions.clone()).with_radii([0.1]),
+            )?;
         }
     }
     // Go back to neutral positions
