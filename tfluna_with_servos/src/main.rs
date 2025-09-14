@@ -2,6 +2,9 @@ use std::error::Error;
 use std::thread;
 use std::time::Duration;
 
+use embedded_tfluna::{TFLunaSync, i2c::{TFLuna, I2CAddress}};
+use rppal::i2c::I2c;
+use rppal::hal::Delay;
 use rppal::pwm::{Pwm, Polarity, Channel};
 
 // Servo configuration.
@@ -23,6 +26,19 @@ const TOP_SERVO_CHANNEL: Channel = Channel::Pwm1;
 
 
 fn main() -> Result<(), Box<dyn Error>> {
+    // Instantiate I2C peripheral
+    let i2c = match I2c::new() {
+        Ok(i2c) => i2c,
+        Err(err) => {
+            println!("Failed getting acces to I2c due to {}", err);
+            panic!();
+        }
+    };
+
+    let mut tfluna = TFLuna::new(i2c, I2CAddress::default(), Delay::new()).unwrap();
+    tfluna.enable().unwrap();
+    thread::sleep(Duration::from_millis(100));
+
     // Enable PWM channel 0 (BCM GPIO 12, physical pin 32) with the specified period,
     // and rotate the servo to the neutral position.
     let pwm_bottom = Pwm::with_period(
@@ -56,6 +72,8 @@ fn main() -> Result<(), Box<dyn Error>> {
             println!("Top servo pulse: {pulse_top}");
             pwm_top.set_pulse_width(Duration::from_micros(pulse_top))?;
             thread::sleep(Duration::from_millis(200));
+            let measurement = tfluna.measure().unwrap();
+            println!("measurement = {:?}", measurement);
         }
     }
     // Go back to neutral positions
