@@ -3,6 +3,7 @@ use std::error::Error;
 use std::thread;
 use std::time::Duration;
 
+use colorgrad::Gradient;
 use embedded_tfluna::{
     i2c::{I2CAddress, TFLuna},
     TFLunaSync,
@@ -124,15 +125,21 @@ fn main() -> Result<(), Box<dyn Error>> {
     let servo_top = ServoMotor::new(pwm_top, PULSE_NEUTRAL_TOP_US, PULSE_MAX_US, MAX_ANGLE_DEG)?;
     thread::sleep(Duration::from_millis(1000));
 
+    // Color gradient generator for point cloud
+    let g = colorgrad::preset::spectral();
+    // Vector to store all points
     let mut positions = Vec::new();
+    let mut colors = Vec::new();
 
-    for angle_bottom in (-(MAX_ANGLE_DEG as i64)..=(MAX_ANGLE_DEG as i64)).step_by(1) {
+    let angle_step = 1;
+
+    for angle_bottom in (-(MAX_ANGLE_DEG as i64)..=(MAX_ANGLE_DEG as i64)).step_by(angle_step) {
         println!("==========");
         println!("Bottom servo angle: {angle_bottom}");
         servo_bottom.set_angle(angle_bottom)?;
         thread::sleep(Duration::from_millis(200));
 
-        for angle_top in (-(MAX_ANGLE_DEG as i64)..=(MAX_ANGLE_DEG as i64)).step_by(1) {
+        for angle_top in (-(MAX_ANGLE_DEG as i64)..=(MAX_ANGLE_DEG as i64)).step_by(angle_step) {
             println!("----------");
             println!("Top servo angle: {angle_top}");
             servo_top.set_angle(angle_top)?;
@@ -142,14 +149,18 @@ fn main() -> Result<(), Box<dyn Error>> {
             // Helper variables
             let yaw = (angle_bottom as f32).to_radians();
             let pitch = (angle_top as f32).to_radians();
-
+            // Point 3D position
             let px = (measurement.distance as f32) * (pitch as f32).cos() * (yaw as f32).cos();
             let py = (measurement.distance as f32) * (pitch as f32).cos() * (yaw as f32).sin();
             let pz = (measurement.distance as f32) * (pitch as f32).sin();
             let position = [px, py, pz];
+            // Point's color based on distance
+            let color = g.at((measurement.distance as f32) / 800.0).to_rgba8();
+
             println!("distance = {}", measurement.distance);
             println!("position = {position:?}");
             positions.push(position);
+            colors.push(color);
 
             rec.set_time("capture_time", std::time::SystemTime::now());
             rec.log(
@@ -166,7 +177,9 @@ fn main() -> Result<(), Box<dyn Error>> {
             )?;
             rec.log(
                 "lidar/position",
-                &rerun::Points3D::new(positions.clone()).with_radii([0.1]),
+                &rerun::Points3D::new(positions.clone())
+                    .with_colors(colors.clone())
+                    .with_radii([3.0]),
             )?;
         }
     }

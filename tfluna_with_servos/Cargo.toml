@@ -11,3 +11,4 @@ repository.workspace = true
 rerun = { workspace = true }
 rppal = { workspace = true, features = ["hal"] }
 embedded-tfluna = { path = "/home/anesbenmerzoug/personaldir/code/embedded-tfluna" }
+colorgrad = "0.7.2"
