@@ -5,6 +5,7 @@ This repository contains code for using the TF-Luna Lidar sensor with a raspberr
 ## Workspaces
 
 - [tfluna](tfluna/README.md): Raspberry Pi with the TF-Luna LiDAR.
+- [tfluna_pan_tilt](tfluna_pan_tilt/README.md): Raspberry Pi with the TF-Luna LiDAR mounted on a pan-tilt mechanism with two servos.
 
 ## Hardware
 
