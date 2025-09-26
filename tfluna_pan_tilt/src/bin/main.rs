@@ -1,3 +1,5 @@
+extern crate tfluna_pan_tilt;
+
 use std::env;
 use std::error::Error;
 use std::thread;
@@ -9,6 +11,8 @@ use rerun;
 use rppal::hal::Delay;
 use rppal::i2c::I2c;
 use rppal::pwm::{Channel, Polarity, Pwm};
+
+use tfluna_pan_tilt::servo::ServoMotor;
 
 // Servo configuration.
 // minimum and maximum values.
@@ -29,49 +33,6 @@ const MAX_ANGLE_DEG: u64 = 45;
 const BOTTOM_SERVO_CHANNEL: Channel = Channel::Pwm0;
 const TOP_SERVO_CHANNEL: Channel = Channel::Pwm1;
 
-struct ServoMotor {
-    pwm: Pwm,
-    max_angle: u64,
-    intercept: f64,
-    slope: f64,
-}
-
-impl ServoMotor {
-    fn new(
-        pwm: Pwm,
-        neutral_pulse: u64,
-        max_pulse: u64,
-        max_angle: u64,
-    ) -> Result<ServoMotor, Box<dyn Error>> {
-        let intercept = neutral_pulse as f64;
-        let slope = (max_pulse as f64 - intercept) / (max_angle as f64);
-        let servo: ServoMotor = ServoMotor {
-            pwm,
-            max_angle,
-            intercept,
-            slope,
-        };
-        servo.set_angle(0)?;
-        Ok(servo)
-    }
-
-    fn set_angle(&self, angle: i64) -> Result<(), String> {
-        if angle.abs() > (self.max_angle as i64) {
-            Err(format!(
-                "Provided angle '{}' is outside of valid range [{}, {}]",
-                angle,
-                -(self.max_angle as i64),
-                self.max_angle
-            ))
-        } else {
-            let pulse = self.slope * (angle as f64) + self.intercept;
-            self.pwm
-                .set_pulse_width(Duration::from_micros(pulse as u64))
-                .map_err(|x| format!("Failed setting pulse width: {x}"))?;
-            Ok(())
-        }
-    }
-}
 
 fn main() -> Result<(), Box<dyn Error>> {
     // Connect to rerun server
