@@ -1,47 +1,64 @@
-use std::time::Duration;
-use std::error::Error;
+use std::cell::RefCell;
+use std::rc::Rc;
 
-use rppal::pwm::{Pwm};
+use embedded_hal::i2c::I2c as I2cTrait;
+use pwm_pca9685::{Channel, Pca9685};
 
-pub struct ServoMotor {
-    pwm: Pwm,
-    max_angle: u64,
-    intercept: f64,
-    slope: f64,
+#[derive(Debug, Clone)]
+pub enum Error {
+    InvalidParameter(String),
+    Other(String),
 }
 
-impl ServoMotor {
+pub struct ServoMotor<I2c: I2cTrait> {
+    pwm: Rc<RefCell<Pca9685<I2c>>>,
+    channel: Channel,
+    min_angle: f32,
+    max_angle: f32,
+    intercept: f32,
+    slope: f32,
+}
+
+impl<I2c: I2cTrait> ServoMotor<I2c> {
     pub fn new(
-        pwm: Pwm,
-        neutral_pulse: u64,
-        max_pulse: u64,
-        max_angle: u64,
-    ) -> Result<ServoMotor, Box<dyn Error>> {
-        let intercept = neutral_pulse as f64;
-        let slope = (max_pulse as f64 - intercept) / (max_angle as f64);
-        let servo: ServoMotor = ServoMotor {
+        pwm: Rc<RefCell<Pca9685<I2c>>>,
+        channel: Channel,
+        min_angle_counter: u32,
+        max_angle_counter: u32,
+        min_angle: f32,
+        max_angle: f32,
+    ) -> Result<ServoMotor<I2c>, Error> {
+        let slope = ((max_angle_counter - min_angle_counter) as f32) / (max_angle - min_angle);
+        let intercept = max_angle_counter as f32 - slope * max_angle;
+        let mut servo: ServoMotor<I2c> = ServoMotor {
             pwm,
+            channel,
+            min_angle,
             max_angle,
             intercept,
             slope,
         };
-        servo.set_angle(0)?;
+        servo.set_angle(0.0)?;
         Ok(servo)
     }
 
-    pub fn set_angle(&self, angle: i64) -> Result<(), String> {
-        if angle.abs() > (self.max_angle as i64) {
-            Err(format!(
+    pub fn set_angle(&mut self, angle: f32) -> Result<(), Error> {
+        if (angle > self.max_angle) || (angle < self.min_angle) {
+            Err(Error::InvalidParameter(format!(
                 "Provided angle '{}' is outside of valid range [{}, {}]",
-                angle,
-                -(self.max_angle as i64),
-                self.max_angle
-            ))
+                angle, self.min_angle, self.max_angle,
+            )))
         } else {
-            let pulse = self.slope * (angle as f64) + self.intercept;
+            let pulse = self.slope * angle + self.intercept;
+            println!("Pulse = {}", pulse);
             self.pwm
-                .set_pulse_width(Duration::from_micros(pulse as u64))
-                .map_err(|x| format!("Failed setting pulse width: {x}"))?;
+                .borrow_mut()
+                .set_channel_on(self.channel, 0)
+                .map_err(|_x| Error::Other(format!("Failed setting pulse width: {pulse}")))?;
+            self.pwm
+                .borrow_mut()
+                .set_channel_off(self.channel, pulse as u16)
+                .map_err(|_x| Error::Other(format!("Failed setting pulse width: {pulse}")))?;
             Ok(())
         }
     }

@@ -1,38 +1,35 @@
 extern crate tfluna_pan_tilt;
 
+use std::cell::RefCell;
 use std::env;
 use std::error::Error;
+use std::rc::Rc;
+use std::sync::Mutex;
 use std::thread;
 use std::time::Duration;
 
 use colorgrad::Gradient;
+use embedded_hal_bus::i2c::MutexDevice;
 use embedded_tfluna::i2c::{Address, TFLuna};
+use pwm_pca9685::{Address as PWMAddress, Channel, Pca9685};
 use rerun;
 use rppal::hal::Delay;
 use rppal::i2c::I2c;
-use rppal::pwm::{Channel, Polarity, Pwm};
 
 use tfluna_pan_tilt::servo::ServoMotor;
 
 // Servo configuration.
-// minimum and maximum values.
-//
-/// Period: 20 ms (50 Hz)
-const PERIOD_MS: u64 = 20;
-// Position Left
-const PULSE_MIN_US: u64 = 1000;
-/// Position Center
-const PULSE_NEUTRAL_BOTTOM_US: u64 = 1500;
-const PULSE_NEUTRAL_TOP_US: u64 = 1525;
-/// Position Right
-const PULSE_MAX_US: u64 = 2000;
-// Max Angle
-const MAX_ANGLE_DEG: u64 = 45;
+// -45 degrees
+const MIN_ANGLE_COUNTER: u32 = 200;
+/// 45 degrees
+const MAX_ANGLE_COUNTER: u32 = 410;
+// Max and Min Angles
+const MIN_ANGLE_DEG: f32 = -45.0;
+const MAX_ANGLE_DEG: f32 = 45.0;
 
 // Servo Channels
-const BOTTOM_SERVO_CHANNEL: Channel = Channel::Pwm0;
-const TOP_SERVO_CHANNEL: Channel = Channel::Pwm1;
-
+const BOTTOM_SERVO_CHANNEL: Channel = Channel::C14;
+const TOP_SERVO_CHANNEL: Channel = Channel::C15;
 
 fn main() -> Result<(), Box<dyn Error>> {
     // Connect to rerun server
@@ -44,43 +41,47 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     // Instantiate I2C peripheral
     let i2c = match I2c::new() {
-        Ok(i2c) => i2c,
+        Ok(i2c) => Mutex::new(i2c),
         Err(err) => {
             println!("Failed getting acces to I2c due to {}", err);
             panic!();
         }
     };
-
-    let mut tfluna = TFLuna::new(i2c, Address::default(), Delay::new()).unwrap();
+    let i2c_tfluna = MutexDevice::new(&i2c);
+    let mut tfluna = TFLuna::new(i2c_tfluna, Address::default(), Delay::new()).unwrap();
     tfluna.enable().unwrap();
     thread::sleep(Duration::from_millis(100));
 
-    // Enable PWM channel 0 (BCM GPIO 12, physical pin 32) with the specified period,
-    // and rotate the servo to the neutral position.
-    let pwm_bottom = Pwm::with_period(
-        BOTTOM_SERVO_CHANNEL,
-        Duration::from_millis(PERIOD_MS),
-        Duration::from_micros(PULSE_MAX_US),
-        Polarity::Normal,
-        true,
-    )?;
-    let servo_bottom = ServoMotor::new(
-        pwm_bottom,
-        PULSE_NEUTRAL_BOTTOM_US,
-        PULSE_MAX_US,
-        MAX_ANGLE_DEG,
-    )?;
+    let i2c_servo = MutexDevice::new(&i2c);
+    let address = PWMAddress::default();
+    let mut pwm = Pca9685::new(i2c_servo, address).unwrap();
+    // This corresponds to a frequency of 50 Hz.
+    pwm.set_prescale(122).unwrap();
+    // It is necessary to enable the device.
+    pwm.enable().unwrap();
 
-    // Enable PWM channel 1 (BCM GPIO 13, physical pin 33) with the specified period,
-    // and rotate the servo to the neutral position.
-    let pwm_top = Pwm::with_period(
+    let pwm = Rc::new(RefCell::new(pwm));
+
+    let mut servo_bottom = ServoMotor::new(
+        pwm.clone(),
+        BOTTOM_SERVO_CHANNEL,
+        MIN_ANGLE_COUNTER,
+        MAX_ANGLE_COUNTER,
+        MIN_ANGLE_DEG,
+        MAX_ANGLE_DEG,
+    )
+    .unwrap();
+
+    let mut servo_top = ServoMotor::new(
+        pwm.clone(),
         TOP_SERVO_CHANNEL,
-        Duration::from_millis(PERIOD_MS),
-        Duration::from_micros(PULSE_MAX_US),
-        Polarity::Normal,
-        true,
-    )?;
-    let servo_top = ServoMotor::new(pwm_top, PULSE_NEUTRAL_TOP_US, PULSE_MAX_US, MAX_ANGLE_DEG)?;
+        MIN_ANGLE_COUNTER,
+        MAX_ANGLE_COUNTER,
+        MIN_ANGLE_DEG,
+        MAX_ANGLE_DEG,
+    )
+    .unwrap();
+
     thread::sleep(Duration::from_millis(1000));
 
     // Color gradient generator for point cloud
@@ -89,19 +90,24 @@ fn main() -> Result<(), Box<dyn Error>> {
     let mut positions = Vec::new();
     let mut colors = Vec::new();
 
-    let angle_step = 1;
+    let angle_step = 45.0;
+    let mut angle_bottom = MIN_ANGLE_DEG;
 
-    for angle_bottom in (-(MAX_ANGLE_DEG as i64)..=(MAX_ANGLE_DEG as i64)).step_by(angle_step) {
+    while (angle_bottom >= MIN_ANGLE_DEG) && (angle_bottom <= MAX_ANGLE_DEG) {
         println!("==========");
         println!("Bottom servo angle: {angle_bottom}");
-        servo_bottom.set_angle(angle_bottom)?;
-        thread::sleep(Duration::from_millis(200));
+        servo_bottom.set_angle(angle_bottom).unwrap();
+        angle_bottom += angle_step;
+        thread::sleep(Duration::from_millis(500));
 
-        for angle_top in (-(MAX_ANGLE_DEG as i64)..=(MAX_ANGLE_DEG as i64)).step_by(angle_step) {
+        let mut angle_top = MIN_ANGLE_DEG;
+
+        while (angle_top >= MIN_ANGLE_DEG) && (angle_top <= MAX_ANGLE_DEG) {
             println!("----------");
             println!("Top servo angle: {angle_top}");
-            servo_top.set_angle(angle_top)?;
-            thread::sleep(Duration::from_millis(200));
+            servo_top.set_angle(angle_top).unwrap();
+            angle_top += angle_step;
+            thread::sleep(Duration::from_millis(500));
 
             let measurement = tfluna.measure().unwrap();
             // Helper variables
@@ -142,8 +148,8 @@ fn main() -> Result<(), Box<dyn Error>> {
         }
     }
     // Go back to neutral positions
-    servo_bottom.set_angle(0)?;
-    servo_top.set_angle(0)?;
+    servo_bottom.set_angle(0.0).unwrap();
+    servo_top.set_angle(0.0).unwrap();
     thread::sleep(Duration::from_millis(1000));
     Ok(())
 }
