@@ -4,10 +4,7 @@ use std::thread;
 use std::time::Duration;
 
 use colorgrad::Gradient;
-use embedded_tfluna::{
-    i2c::{I2CAddress, TFLuna},
-    TFLunaSync,
-};
+use embedded_tfluna::i2c::{Address, TFLuna};
 use rerun;
 use rppal::hal::Delay;
 use rppal::i2c::I2c;
@@ -93,7 +90,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         }
     };
 
-    let mut tfluna = TFLuna::new(i2c, I2CAddress::default(), Delay::new()).unwrap();
+    let mut tfluna = TFLuna::new(i2c, Address::default(), Delay::new()).unwrap();
     tfluna.enable().unwrap();
     thread::sleep(Duration::from_millis(100));
 

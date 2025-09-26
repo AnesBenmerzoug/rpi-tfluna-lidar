@@ -8633,7 +8633,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "tfluna_with_servos"
+name = "tfluna_pan_tilt"
 version = "0.1.0"
 dependencies = [
  "colorgrad",
