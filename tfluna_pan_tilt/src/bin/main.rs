@@ -10,7 +10,7 @@ use std::time::Duration;
 
 use colorgrad::Gradient;
 use embedded_hal_bus::i2c::MutexDevice;
-use embedded_tfluna::i2c::{Address, TFLuna};
+use embedded_tfluna::{types::RangingMode, i2c::{Address, TFLuna}};
 use pwm_pca9685::{Address as PWMAddress, Channel, Pca9685};
 use rerun;
 use rppal::hal::Delay;
@@ -50,6 +50,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let i2c_tfluna = MutexDevice::new(&i2c);
     let mut tfluna = TFLuna::new(i2c_tfluna, Address::default(), Delay::new()).unwrap();
     tfluna.enable().unwrap();
+    tfluna.set_ranging_mode(RangingMode::Trigger).unwrap();
     thread::sleep(Duration::from_millis(100));
 
     let i2c_servo = MutexDevice::new(&i2c);
@@ -90,26 +91,34 @@ fn main() -> Result<(), Box<dyn Error>> {
     let mut positions = Vec::new();
     let mut colors = Vec::new();
 
-    let angle_step = 45.0;
+    let angle_step = 1.0;
+    let sleep_duration = Duration::from_millis(10);
     let mut angle_bottom = MIN_ANGLE_DEG;
+    servo_bottom.set_angle(angle_bottom).unwrap();
+    thread::sleep(Duration::from_millis(500));
 
     while (angle_bottom >= MIN_ANGLE_DEG) && (angle_bottom <= MAX_ANGLE_DEG) {
         println!("==========");
         println!("Bottom servo angle: {angle_bottom}");
         servo_bottom.set_angle(angle_bottom).unwrap();
         angle_bottom += angle_step;
-        thread::sleep(Duration::from_millis(500));
+        thread::sleep(sleep_duration);
 
         let mut angle_top = MIN_ANGLE_DEG;
+        servo_top.set_angle(angle_top).unwrap();
+        thread::sleep(Duration::from_millis(500));
 
         while (angle_top >= MIN_ANGLE_DEG) && (angle_top <= MAX_ANGLE_DEG) {
             println!("----------");
             println!("Top servo angle: {angle_top}");
             servo_top.set_angle(angle_top).unwrap();
             angle_top += angle_step;
-            thread::sleep(Duration::from_millis(500));
+            thread::sleep(sleep_duration);
 
+            tfluna.trigger_measurement().unwrap();
+            thread::sleep(Duration::from_millis(10));
             let measurement = tfluna.measure().unwrap();
+            thread::sleep(Duration::from_millis(10));
             // Helper variables
             let yaw = (angle_bottom as f32).to_radians();
             let pitch = (angle_top as f32).to_radians();
@@ -143,7 +152,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                 "lidar/position",
                 &rerun::Points3D::new(positions.clone())
                     .with_colors(colors.clone())
-                    .with_radii([3.0]),
+                    .with_radii([2.0]),
             )?;
         }
     }

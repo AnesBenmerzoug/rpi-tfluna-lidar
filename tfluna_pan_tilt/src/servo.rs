@@ -50,7 +50,6 @@ impl<I2c: I2cTrait> ServoMotor<I2c> {
             )))
         } else {
             let pulse = self.slope * angle + self.intercept;
-            println!("Pulse = {}", pulse);
             self.pwm
                 .borrow_mut()
                 .set_channel_on(self.channel, 0)
