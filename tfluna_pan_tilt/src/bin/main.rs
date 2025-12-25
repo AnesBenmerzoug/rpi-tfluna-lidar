@@ -8,6 +8,7 @@ use std::sync::Mutex;
 use std::thread;
 use std::time::Duration;
 
+use clap::Parser;
 use colorgrad::Gradient;
 use embedded_hal_bus::i2c::MutexDevice;
 use embedded_tfluna::{RangingMode, i2c::{Address, TFLuna}};
@@ -31,9 +32,24 @@ const MAX_ANGLE_DEG: f32 = 30.0;
 const BOTTOM_SERVO_CHANNEL: Channel = Channel::C14;
 const TOP_SERVO_CHANNEL: Channel = Channel::C15;
 
+#[derive(clap::Parser, Debug)]
+#[command(version = None, about = "Configurable TFLuna on Pan Tilt", long_about = None)]
+struct Cli {
+    #[arg(long, default_value_t = String::from("192.168.178.21"), help = "IP Address of a running rerun server")]
+    rerun_server_ip: String,
+    #[arg(long, default_value_t = 100, help = "Delay in milliseconds after servo motor command")]
+    servo_motor_delay: u64,
+    #[arg(long, default_value_t = 5.0, help = "Size of servo motor angle increment in degrees")]
+    angle_step: f32,
+}
+
 fn main() -> Result<(), Box<dyn Error>> {
+    let args = Cli::parse();
+    let rerun_server_ip = args.rerun_server_ip;
+    let servo_motor_delay = Duration::from_millis(args.servo_motor_delay);
+    let angle_step = args.angle_step;
+
     // Connect to rerun server
-    let rerun_server_ip = env::var("RERUN_SERVER_IP").unwrap_or(String::from("192.168.178.21"));
     let rec = rerun::RecordingStreamBuilder::new("rpi-lidar").connect_grpc_opts(
         format!("rerun+http://{}:9876/proxy", rerun_server_ip),
         rerun::default_flush_timeout(),
@@ -91,29 +107,23 @@ fn main() -> Result<(), Box<dyn Error>> {
     let mut positions = Vec::new();
     let mut colors = Vec::new();
 
-    let angle_step = 5.0;
-    let sleep_duration = Duration::from_millis(10);
     let mut angle_bottom = MIN_ANGLE_DEG;
     servo_bottom.set_angle(angle_bottom).unwrap();
     thread::sleep(Duration::from_millis(1000));
 
     while (angle_bottom >= MIN_ANGLE_DEG) && (angle_bottom <= MAX_ANGLE_DEG) {
-        println!("==========");
-        println!("Bottom servo angle: {angle_bottom}");
         servo_bottom.set_angle(angle_bottom).unwrap();
         angle_bottom += angle_step;
-        thread::sleep(sleep_duration);
+        thread::sleep(servo_motor_delay);
 
         let mut angle_top = MIN_ANGLE_DEG;
         servo_top.set_angle(angle_top).unwrap();
         thread::sleep(Duration::from_millis(500));
 
         while (angle_top >= MIN_ANGLE_DEG) && (angle_top <= MAX_ANGLE_DEG) {
-            println!("----------");
-            println!("Top servo angle: {angle_top}");
             servo_top.set_angle(angle_top).unwrap();
             angle_top += angle_step;
-            thread::sleep(sleep_duration);
+            thread::sleep(servo_motor_delay);
 
             tfluna.trigger_measurement().unwrap();
             thread::sleep(Duration::from_millis(10));
@@ -129,9 +139,6 @@ fn main() -> Result<(), Box<dyn Error>> {
             let position = [px, py, pz];
             // Point's color based on distance
             let color = g.at((measurement.distance as f32) / 800.0).to_rgba8();
-
-            println!("distance = {}", measurement.distance);
-            println!("position = {position:?}");
             positions.push(position);
             colors.push(color);
 
@@ -156,7 +163,7 @@ fn main() -> Result<(), Box<dyn Error>> {
             )?;
         }
     }
-    // Go back to neutral positions
+    // Go back to neutral position
     servo_bottom.set_angle(0.0).unwrap();
     servo_top.set_angle(0.0).unwrap();
     thread::sleep(Duration::from_millis(1000));
