@@ -2,7 +2,35 @@
 
 This repository contains code for using the TF-Luna Lidar sensor with a raspberry pi and visualizing the data.
 
-## Package
+## Hardware
+
+- [Raspberry Pi 3 model B.](https://www.raspberrypi.com/products/raspberry-pi-3-model-b/)
+- [TF-Luna LiDAR.](https://en.benewake.com/TFLuna/index.html)
+- Computer to cross-compile the code and to run the rerun server and visualization.
+
+## Getting Started
+
+- Set up Raspberry Pi with SSH access
+- [Install Rust](https://www.rust-lang.org/tools/install) 1.86
+- [Install Rerun viewer](https://rerun.io/docs/getting-started/installing-viewer#installing-the-viewer)
+
+Each of the packages assumes that you have a running Rerun server that can be started with:
+
+```shell
+rerun --save pan_tilt.rrd
+```
+
+This will listen for incoming gRPC connections from the logging SDK and stream the results to the `pan_tilt.rrd` file.
+
+Once the sending is done, you can visualize the data using:
+
+```shell
+rerun pan_tilt
+```
+
+This will open a new window for the viewer and stream the data to it and allow you to visualize.
+
+## Packages
 
 - [tfluna](tfluna/README.md): Raspberry Pi with the TF-Luna LiDAR.
 
@@ -19,18 +47,6 @@ This repository contains code for using the TF-Luna Lidar sensor with a raspberr
   ```shell
   cargo run --release --package tfluna_pan_tilt
   ```
-
-## Hardware
-
-- [Raspberry Pi 3 model B.](https://www.raspberrypi.com/products/raspberry-pi-3-model-b/)
-- [TF-Luna LiDAR.](https://en.benewake.com/TFLuna/index.html)
-- Computer to cross-compile the code and to run the rerun server and visualization.
-
-## Getting Started
-
-- Set up Raspberry Pi with SSH access
-- [Install Rust](https://www.rust-lang.org/tools/install) 1.86
-- [Install Rerun viewer](https://rerun.io/docs/getting-started/installing-viewer#installing-the-viewer)
 
 # License
 
