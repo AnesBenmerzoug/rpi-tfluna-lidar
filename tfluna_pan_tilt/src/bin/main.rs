@@ -1,7 +1,6 @@
 extern crate tfluna_pan_tilt;
 
 use std::cell::RefCell;
-use std::env;
 use std::error::Error;
 use std::rc::Rc;
 use std::sync::Mutex;
@@ -11,7 +10,10 @@ use std::time::Duration;
 use clap::Parser;
 use colorgrad::Gradient;
 use embedded_hal_bus::i2c::MutexDevice;
-use embedded_tfluna::{RangingMode, i2c::{Address, TFLuna}};
+use embedded_tfluna::{
+    RangingMode,
+    i2c::{Address, TFLuna},
+};
 use pwm_pca9685::{Address as PWMAddress, Channel, Pca9685};
 use rerun;
 use rppal::hal::Delay;
@@ -37,9 +39,17 @@ const TOP_SERVO_CHANNEL: Channel = Channel::C15;
 struct Cli {
     #[arg(long, default_value_t = String::from("192.168.178.21"), help = "IP Address of a running rerun server")]
     rerun_server_ip: String,
-    #[arg(long, default_value_t = 100, help = "Delay in milliseconds after servo motor command")]
+    #[arg(
+        long,
+        default_value_t = 100,
+        help = "Delay in milliseconds after servo motor command"
+    )]
     servo_motor_delay: u64,
-    #[arg(long, default_value_t = 5.0, help = "Size of servo motor angle increment in degrees")]
+    #[arg(
+        long,
+        default_value_t = 5.0,
+        help = "Size of servo motor angle increment in degrees"
+    )]
     angle_step: f32,
 }
 
@@ -48,12 +58,25 @@ fn main() -> Result<(), Box<dyn Error>> {
     let rerun_server_ip = args.rerun_server_ip;
     let servo_motor_delay = Duration::from_millis(args.servo_motor_delay);
     let angle_step = args.angle_step;
+    // Rerun parameters
+    let application_id = "rpi-lidar";
+    // We use the same recording ID for all runs in order to be able to easily compare the data in the viewer.
+    let recording_id = "123";
+    let entity_path_prefix = format!("{}ms-{}deg", args.servo_motor_delay, args.angle_step);
+    let yaw_entity_path = format!("{}/yaw", entity_path_prefix);
+    let pitch_entity_path = format!("{}/pitch", entity_path_prefix);
+    let distance_entity_path = format!("{}/distance", entity_path_prefix);
+    let signal_strength_entity_path = format!("{}/signal_strength", entity_path_prefix);
+    let temperature_entity_path = format!("{}/temperature", entity_path_prefix);
+    let position_entity_path = format!("{}/position", entity_path_prefix);
 
     // Connect to rerun server
-    let rec = rerun::RecordingStreamBuilder::new("rpi-lidar").connect_grpc_opts(
-        format!("rerun+http://{}:9876/proxy", rerun_server_ip),
-        rerun::default_flush_timeout(),
-    )?;
+    let rec = rerun::RecordingStreamBuilder::new(application_id)
+        .recording_id(recording_id)
+        .connect_grpc_opts(
+            format!("rerun+http://{}:9876/proxy", rerun_server_ip),
+            rerun::default_flush_timeout(),
+        )?;
 
     // Instantiate I2C peripheral
     let i2c = match I2c::new() {
@@ -138,25 +161,27 @@ fn main() -> Result<(), Box<dyn Error>> {
             let pz = (measurement.distance as f32) * (pitch as f32).sin();
             let position = [px, py, pz];
             // Point's color based on distance
-            let color = g.at((measurement.distance as f32) / 800.0).to_rgba8();
+            let color = g.at((measurement.distance as f32) / 200.0).to_rgba8();
             positions.push(position);
             colors.push(color);
 
             rec.set_time("capture_time", std::time::SystemTime::now());
+            rec.log(yaw_entity_path, &rerun::Scalars::single(angle_bottom));
+            rec.log(pitch_entity_path, &rerun::Scalars::single(angle_top));
             rec.log(
-                "lidar/distance",
+                distance_entity_path.clone(),
                 &rerun::Scalars::single(measurement.distance),
             )?;
             rec.log(
-                "lidar/signal_strength",
+                signal_strength_entity_path.clone(),
                 &rerun::Scalars::single(measurement.signal_strength),
             )?;
             rec.log(
-                "lidar/temperature",
+                temperature_entity_path.clone(),
                 &rerun::Scalars::single(measurement.temperature),
             )?;
             rec.log(
-                "lidar/position",
+                position_entity_path.clone(),
                 &rerun::Points3D::new(positions.clone())
                     .with_colors(colors.clone())
                     .with_radii([2.0]),
