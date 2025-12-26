@@ -75,7 +75,6 @@ fn main() -> Result<(), Box<dyn Error>> {
         .recording_id(recording_id)
         .connect_grpc_opts(
             format!("rerun+http://{}:9876/proxy", rerun_server_ip),
-            rerun::default_flush_timeout(),
         )?;
 
     // Instantiate I2C peripheral
@@ -166,8 +165,8 @@ fn main() -> Result<(), Box<dyn Error>> {
             colors.push(color);
 
             rec.set_time("capture_time", std::time::SystemTime::now());
-            rec.log(yaw_entity_path, &rerun::Scalars::single(angle_bottom));
-            rec.log(pitch_entity_path, &rerun::Scalars::single(angle_top));
+            rec.log(yaw_entity_path.clone(), &rerun::Scalars::single(angle_bottom))?;
+            rec.log(pitch_entity_path.clone(), &rerun::Scalars::single(angle_top))?;
             rec.log(
                 distance_entity_path.clone(),
                 &rerun::Scalars::single(measurement.distance),
