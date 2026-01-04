@@ -32,21 +32,46 @@ This will open a new window for the viewer and stream the data to it and allow y
 
 ## Packages
 
-- [tfluna](tfluna/README.md): Raspberry Pi with the TF-Luna LiDAR.
+### [tfluna](tfluna/README.md)
 
-  Run the code with:
+Raspberry Pi with the TF-Luna LiDAR.
 
-  ```shell
-  cargo run --release --package tfluna
-  ```
+Run the code with:
 
-- [tfluna_pan_tilt](tfluna_pan_tilt/README.md): Raspberry Pi with the TF-Luna LiDAR mounted on a pan-tilt mechanism with two servos.
+```shell
+cargo run --release --package tfluna
+```
 
-  Run the code with:
+### [tfluna_pan_tilt](tfluna_pan_tilt/README.md)
 
-  ```shell
-  cargo run --release --package tfluna_pan_tilt
-  ```
+Raspberry Pi with the TF-Luna LiDAR mounted on a pan-tilt mechanism with two servos.
+
+Run the main code with:
+
+```shell
+cargo run --release --package tfluna_pan_tilt
+```
+
+Once that's done, use this to run different combinations of parameters and save the data:
+
+```shell
+bash scripts/run_pan_tilt_combinations.sh
+```
+
+Finally, run the data analysis on that data with:
+
+```shell
+cargo run --release --package tfluna_pan_tilt --bin data_analysis --target x86_64-unknown-linux-gnu
+```
+
+If you're not running linux or simply have a different target architecture, use this command to find the target:
+
+```shell
+rustc --version --verbose
+```
+
+It will correspond to the `host` key.
+
 
 # License
 
