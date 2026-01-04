@@ -12,5 +12,5 @@ license = "LGPL-2.1"
 repository = "https://github.com/AnesBenmerzoug/rpi-tfluna-lidar"
 
 [workspace.dependencies]
-rerun = "0.28.1"
+rerun = "0.24.1"
 rppal = "0.22.1"
