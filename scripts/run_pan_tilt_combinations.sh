@@ -2,7 +2,7 @@
 
 HOST="raspberrypi"
 EXECUTABLE="~/Projects/main"
-RERUN_DATA_FILE="data/pan_tilt.rrd"
+RERUN_DATA_FILE="data/pan_tilt_combinations.rrd"
 N_REPEAT=3
 SERVO_MOTOR_DELAYS=("500" "200" "100" "50" "10")
 ANGLE_STEPS=("1" "5" "15.0")

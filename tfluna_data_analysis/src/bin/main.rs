@@ -8,10 +8,12 @@ use rerun::dataframe::{QueryEngine, QueryExpression, SparseFillStrategy, Timelin
 use rerun::external::arrow::ipc::writer::FileWriter;
 use rerun::external::arrow::{array::RecordBatch, compute::concat_batches};
 
-use tfluna_pan_tilt::evaluate::{analyze_experiment, calculate_repeatability};
+use tfluna_pan_tilt::evaluate::{
+    analyze_experiment, calculate_repeatability, plot_error_scatter,
+};
 
 fn main() -> Result<(), Box<dyn Error>> {
-    let data_file = "data/pan_tilt.rrd";
+    let data_file = "data/pan_tilt_combinations.rrd.rrd";
     let timeline = TimelineName::log_time();
     let engines = QueryEngine::from_rrd_filepath(&ChunkStoreConfig::DEFAULT, data_file)?;
 
@@ -41,15 +43,14 @@ fn main() -> Result<(), Box<dyn Error>> {
     let data_df = rerun_batches_to_polars(&all_batches)?;
     println!("dataframe: {}", data_df);
 
-    println!("dataframe columns: {:?}", data_df.get_column_names());
-
     println!("Analyzing data");
     let results_df = analyze_experiment(data_df)?;
     println!("Calculating repeatability metrics");
     let repeatability_df = calculate_repeatability(&results_df)?;
-
     println!("Results: {}", results_df);
     println!("Repeatability: {}", repeatability_df);
+    println!("Plotting results");
+    plot_error_scatter(&results_df)?;
 
     Ok(())
 }

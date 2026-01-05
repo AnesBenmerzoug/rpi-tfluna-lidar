@@ -42,7 +42,7 @@ Run the code with:
 cargo run --release --package tfluna
 ```
 
-### [tfluna_pan_tilt](tfluna_pan_tilt/README.md)
+### [tfluna_pan_tilt](tfluna_pan_tilt)
 
 Raspberry Pi with the TF-Luna LiDAR mounted on a pan-tilt mechanism with two servos.
 
@@ -58,19 +58,24 @@ Once that's done, use this to run different combinations of parameters and save 
 bash scripts/run_pan_tilt_combinations.sh
 ```
 
+### [tfluna_data_analysis](tfluna_data_analysis)
+
 Finally, run the data analysis on that data with:
 
 ```shell
-cargo run --release --package tfluna_pan_tilt --bin data_analysis --target x86_64-unknown-linux-gnu
+cargo run --release --package tfluna_data_analysis --target x86_64-unknown-linux-gnu
 ```
 
-If you're not running linux or simply have a different target architecture, use this command to find the target:
+This will load the data from the rrd file `data/pan_tilt_combinations.rrd`, analyze it, print and plot the results, save the plots under `data/` 
 
-```shell
-rustc --version --verbose
-```
+> If you're not running linux or simply have a different target architecture, use this command to find the target:
+>
+> ```shell
+> rustc --version --verbose
+> ```
+> 
+> It will correspond to the `host` key.
 
-It will correspond to the `host` key.
 
 
 # License

@@ -1,0 +1,19 @@
+[package]
+name = "tfluna_pan_tilt"
+version = "0.1.0"
+rust-version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+nalgebra = "0.33.2"
+itertools = "0.14.0"
+plotly = "0.13.5"
+polars = { version = "0.52.0", features = [
+    "dtype-full",
+    "timezones",
+    "lazy",
+    "ipc",
+] }

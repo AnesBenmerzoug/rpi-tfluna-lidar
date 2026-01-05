@@ -1,4 +1,11 @@
+use std::collections::HashMap;
+
 use nalgebra::{DMatrix, DVector};
+use plotly::{
+    Bar, Layout, Plot, Scatter,
+    common::{AxisSide, ErrorData, ErrorType, Font, Mode, Title, color::Rgb},
+    layout::{Axis, BarMode, GridPattern, LayoutGrid, themes::BuiltinTheme},
+};
 use polars::prelude::*;
 
 #[derive(Debug, Clone)]
@@ -162,38 +169,39 @@ fn process_group(df: DataFrame) -> PolarsResult<DataFrame> {
     let min_time = timestamps.min().unwrap_or(0);
     let max_time = timestamps.max().unwrap_or(0);
     let total_time_ns = max_time - min_time;
-    let total_time_ms = total_time_ns as f64 / 1_000_000.0;
+    let total_time_s = total_time_ns as f64 * 10e-9;
 
     // Extract positions for plane fitting
-    let positions_col = df.column("/position:Points3D:positions")?;
-    let positions_series = positions_col.as_materialized_series();
-    let positions_list = positions_series.list()?;
-
-    let mut all_positions = Vec::new();
-    for i in 0..positions_list.len() {
-        if let Some(series) = positions_list.get_as_series(i) {
-            if let Ok(inner_array) = series.array() {
-                for j in 0..inner_array.len() {
-                    if let Some(point_series) = inner_array.get_as_series(j) {
-                        if let Ok(floats) = point_series.f32() {
-                            let point: Vec<f32> = floats.into_iter().filter_map(|x| x).collect();
-                            if point.len() >= 3 {
-                                all_positions.push(point);
-                            }
+    let all_positions = {
+        let positions_col = df.column("/position:Points3D:positions")?;
+        let positions_series = positions_col.as_materialized_series();
+        let positions_list = positions_series.list()?;
+        let mut all_positions = Vec::new();
+        // Get last one since it contains all points
+        let series = positions_list
+            .get_as_series(positions_list.len() - 1)
+            .unwrap();
+        if let Ok(inner_array) = series.array() {
+            for j in 0..inner_array.len() {
+                if let Some(point_series) = inner_array.get_as_series(j) {
+                    if let Ok(floats) = point_series.f32() {
+                        let point: Vec<f32> = floats.into_iter().filter_map(|x| x).collect();
+                        if point.len() >= 3 {
+                            all_positions.push(point);
                         }
                     }
                 }
             }
         }
-    }
-
+        all_positions
+    };
     // Fit plane
     let plane = fit_plane(&all_positions).unwrap();
     let metrics = calculate_plane_metrics(plane);
 
     angle_steps.push(angle_step_val);
     servo_delays.push(servo_delay_val);
-    total_times.push(total_time_ms);
+    total_times.push(total_time_s);
     plane_a.push(metrics.a);
     plane_b.push(metrics.b);
     plane_c.push(metrics.c);
@@ -208,7 +216,7 @@ fn process_group(df: DataFrame) -> PolarsResult<DataFrame> {
     DataFrame::new(vec![
         Series::new("angle_step".into(), angle_steps).into(),
         Series::new("servo_motor_delay".into(), servo_delays).into(),
-        Series::new("total_time_ms".into(), total_times).into(),
+        Series::new("total_time_s".into(), total_times).into(),
         Series::new("num_points".into(), num_points).into(),
         Series::new("plane_a".into(), plane_a).into(),
         Series::new("plane_b".into(), plane_b).into(),
@@ -229,8 +237,8 @@ pub fn calculate_repeatability(results_df: &DataFrame) -> PolarsResult<DataFrame
         .group_by([col("angle_step"), col("servo_motor_delay")])
         .agg([
             // Time statistics
-            col("total_time_ms").mean().alias("avg_time_ms"),
-            col("total_time_ms").std(1).alias("std_time_ms"),
+            col("total_time_s").mean().alias("avg_time_s"),
+            col("total_time_s").std(1).alias("std_time_s"),
             // Error statistics
             col("angle_error_deg").mean().alias("avg_angle_error_deg"),
             col("angle_error_deg").std(1).alias("std_angle_error_deg"),
@@ -246,4 +254,83 @@ pub fn calculate_repeatability(results_df: &DataFrame) -> PolarsResult<DataFrame
         ])
         .sort(["avg_y_error"], SortMultipleOptions::default())
         .collect()
+}
+
+/// Create scatter plot with color bars showing errors
+pub fn plot_error_scatter(results_df: &DataFrame) -> Result<(), Box<dyn std::error::Error>> {
+    // Calculate mean errors for each combination
+    let grouped = results_df
+        .clone()
+        .lazy()
+        .group_by(["angle_step", "servo_motor_delay"])
+        .agg([
+            col("total_time_s").mean().alias("mean_time"),
+            col("y_intercept_error").mean().alias("mean_error"),
+            col("angle_error_deg").mean().alias("mean_angle_error"),
+        ])
+        .collect()?;
+
+    let times: Vec<f64> = grouped
+        .column("mean_time")?
+        .f64()?
+        .into_iter()
+        .filter_map(|v| v)
+        .collect();
+    let y_errors: Vec<f64> = grouped
+        .column("mean_error")?
+        .f64()?
+        .into_iter()
+        .filter_map(|v| v)
+        .collect();
+    let angle_errors: Vec<f64> = grouped
+        .column("mean_angle_error")?
+        .f64()?
+        .into_iter()
+        .filter_map(|v| v)
+        .collect();
+
+    // Create labels for hover text
+    let angle_steps: Vec<f64> = grouped
+        .column("angle_step")?
+        .f64()?
+        .into_iter()
+        .filter_map(|v| v)
+        .collect();
+    let servo_delays: Vec<f64> = grouped
+        .column("servo_motor_delay")?
+        .f64()?
+        .into_iter()
+        .filter_map(|v| v)
+        .collect();
+
+    let hover_text: Vec<String> = angle_steps
+        .iter()
+        .zip(servo_delays.iter())
+        .map(|(a, s)| format!("Angle: {:.2}deg<br>Servo: {:.2}ms", a, s))
+        .collect();
+
+    // Y-intercept error vs Angle Error
+    let trace = Scatter::new(y_errors, angle_errors)
+        .mode(Mode::Markers)
+        .text_array(hover_text)
+        .marker(
+            plotly::common::Marker::new()
+                .size(12)
+                .color_array(times)
+                .color_bar(plotly::common::ColorBar::new().title("Total Time (s)"))
+                .show_scale(true),
+        );
+
+    let layout = Layout::new()
+        .title("Error Trade-off<br>(Color = Total Time (s))")
+        .x_axis(Axis::new().title("Mean Y-Intercept Error (mm)"))
+        .y_axis(Axis::new().title("Mean Angle Error (deg)"));
+
+    let mut plot = Plot::new();
+    plot.add_trace(trace);
+    plot.set_layout(layout);
+    plot.write_html("data/error_scatter.html");
+
+    println!("Saved: data/error_scatter.html");
+    Ok(())
 }
