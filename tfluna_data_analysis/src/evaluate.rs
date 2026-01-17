@@ -1,11 +1,4 @@
-use std::collections::HashMap;
-
 use nalgebra::{DMatrix, DVector};
-use plotly::{
-    Bar, Layout, Plot, Scatter,
-    common::{AxisSide, ErrorData, ErrorType, Font, Mode, Title, color::Rgb},
-    layout::{Axis, BarMode, GridPattern, LayoutGrid, themes::BuiltinTheme},
-};
 use polars::prelude::*;
 
 #[derive(Debug, Clone)]
@@ -254,83 +247,4 @@ pub fn calculate_repeatability(results_df: &DataFrame) -> PolarsResult<DataFrame
         ])
         .sort(["avg_y_error"], SortMultipleOptions::default())
         .collect()
-}
-
-/// Create scatter plot with color bars showing errors
-pub fn plot_error_scatter(results_df: &DataFrame) -> Result<(), Box<dyn std::error::Error>> {
-    // Calculate mean errors for each combination
-    let grouped = results_df
-        .clone()
-        .lazy()
-        .group_by(["angle_step", "servo_motor_delay"])
-        .agg([
-            col("total_time_s").mean().alias("mean_time"),
-            col("y_intercept_error").mean().alias("mean_error"),
-            col("angle_error_deg").mean().alias("mean_angle_error"),
-        ])
-        .collect()?;
-
-    let times: Vec<f64> = grouped
-        .column("mean_time")?
-        .f64()?
-        .into_iter()
-        .filter_map(|v| v)
-        .collect();
-    let y_errors: Vec<f64> = grouped
-        .column("mean_error")?
-        .f64()?
-        .into_iter()
-        .filter_map(|v| v)
-        .collect();
-    let angle_errors: Vec<f64> = grouped
-        .column("mean_angle_error")?
-        .f64()?
-        .into_iter()
-        .filter_map(|v| v)
-        .collect();
-
-    // Create labels for hover text
-    let angle_steps: Vec<f64> = grouped
-        .column("angle_step")?
-        .f64()?
-        .into_iter()
-        .filter_map(|v| v)
-        .collect();
-    let servo_delays: Vec<f64> = grouped
-        .column("servo_motor_delay")?
-        .f64()?
-        .into_iter()
-        .filter_map(|v| v)
-        .collect();
-
-    let hover_text: Vec<String> = angle_steps
-        .iter()
-        .zip(servo_delays.iter())
-        .map(|(a, s)| format!("Angle: {:.2}deg<br>Servo: {:.2}ms", a, s))
-        .collect();
-
-    // Y-intercept error vs Angle Error
-    let trace = Scatter::new(y_errors, angle_errors)
-        .mode(Mode::Markers)
-        .text_array(hover_text)
-        .marker(
-            plotly::common::Marker::new()
-                .size(12)
-                .color_array(times)
-                .color_bar(plotly::common::ColorBar::new().title("Total Time (s)"))
-                .show_scale(true),
-        );
-
-    let layout = Layout::new()
-        .title("Error Trade-off<br>(Color = Total Time (s))")
-        .x_axis(Axis::new().title("Mean Y-Intercept Error (mm)"))
-        .y_axis(Axis::new().title("Mean Angle Error (deg)"));
-
-    let mut plot = Plot::new();
-    plot.add_trace(trace);
-    plot.set_layout(layout);
-    plot.write_html("data/error_scatter.html");
-
-    println!("Saved: data/error_scatter.html");
-    Ok(())
 }

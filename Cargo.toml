@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["tfluna", "tfluna_pan_tilt"]
+members = ["tfluna", "tfluna_pan_tilt", "tfluna_data_analysis"]
 
 [workspace.package]
 name = "rpi-lidar"

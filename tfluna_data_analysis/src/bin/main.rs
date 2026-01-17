@@ -1,19 +1,18 @@
 use itertools::Itertools;
 use std::error::Error;
-use std::io::Cursor;
+use std::fs::File;
 
 use polars::prelude::*;
 use rerun::ChunkStoreConfig;
 use rerun::dataframe::{QueryEngine, QueryExpression, SparseFillStrategy, TimelineName};
-use rerun::external::arrow::ipc::writer::FileWriter;
-use rerun::external::arrow::{array::RecordBatch, compute::concat_batches};
+use rerun::external::arrow::compute::concat_batches;
 
-use tfluna_pan_tilt::evaluate::{
-    analyze_experiment, calculate_repeatability, plot_error_scatter,
-};
+use tfluna_data_analysis::convert::rerun_batches_to_polars;
+use tfluna_data_analysis::evaluate::{analyze_experiment, calculate_repeatability};
+use tfluna_data_analysis::plot::plot_error_scatter;
 
 fn main() -> Result<(), Box<dyn Error>> {
-    let data_file = "data/pan_tilt_combinations.rrd.rrd";
+    let data_file = "data/pan_tilt_combinations.rrd";
     let timeline = TimelineName::log_time();
     let engines = QueryEngine::from_rrd_filepath(&ChunkStoreConfig::DEFAULT, data_file)?;
 
@@ -44,41 +43,24 @@ fn main() -> Result<(), Box<dyn Error>> {
     println!("dataframe: {}", data_df);
 
     println!("Analyzing data");
-    let results_df = analyze_experiment(data_df)?;
+    let mut metrics_df = analyze_experiment(data_df)?;
     println!("Calculating repeatability metrics");
-    let repeatability_df = calculate_repeatability(&results_df)?;
-    println!("Results: {}", results_df);
+    let mut repeatability_df = calculate_repeatability(&metrics_df)?;
+    println!("Metrics: {}", metrics_df);
     println!("Repeatability: {}", repeatability_df);
-    println!("Plotting results");
-    plot_error_scatter(&results_df)?;
+    println!("Saving results");
+    let mut metrics_file = File::create("data/metrics.csv").expect("could not create file");
+    CsvWriter::new(&mut metrics_file)
+        .include_header(true)
+        .with_separator(b',')
+        .finish(&mut metrics_df)?;
+    
+    let mut repeatability_file = File::create("data/repeatability.csv").expect("could not create file");
+    CsvWriter::new(&mut repeatability_file)
+        .include_header(true)
+        .with_separator(b',')
+        .finish(&mut repeatability_df)?;
+    //plot_error_scatter(&results_df)?;
 
     Ok(())
-}
-
-fn rerun_batches_to_polars(batches: &[RecordBatch]) -> PolarsResult<DataFrame> {
-    if batches.is_empty() {
-        return Err(PolarsError::ComputeError("No batches provided".into()));
-    }
-
-    // Serialize all batches with Rerun's Arrow
-    let mut buffer = Vec::new();
-    {
-        let mut writer = FileWriter::try_new(&mut buffer, &batches[0].schema())
-            .map_err(|e| PolarsError::ComputeError(e.to_string().into()))?;
-
-        for batch in batches {
-            writer
-                .write(batch)
-                .map_err(|e| PolarsError::ComputeError(e.to_string().into()))?;
-        }
-        writer
-            .finish()
-            .map_err(|e| PolarsError::ComputeError(e.to_string().into()))?;
-    }
-
-    // Deserialize directly into Polars DataFrame
-    let cursor = Cursor::new(buffer);
-    let df = IpcReader::new(cursor).finish()?;
-
-    Ok(df)
 }
